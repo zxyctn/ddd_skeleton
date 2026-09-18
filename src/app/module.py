@@ -1,5 +1,9 @@
 from collections.abc import Callable
+from typing import Any, TypeVar
+
 from src.app.errors import HandlerAlreadyRegisteredError, HandlerNotFoundError
+
+T = TypeVar("T", bound=Callable[..., Any])
 
 
 class Module:
@@ -8,8 +12,8 @@ class Module:
         self._command_handlers: dict[type, Callable[..., Any]] = {}
         self._query_handlers: dict[type, Callable[..., Any]] = {}
 
-    def on_command(self, command: type):
-        def decorator(handler: Callable[..., Any]):
+    def on_command(self, command: type) -> Callable[[T], T]:
+        def decorator(handler: T) -> T:
             if command in self._command_handlers:
                 raise HandlerAlreadyRegisteredError(
                     f"Handler already registered for command {command.__name__}"
@@ -20,8 +24,8 @@ class Module:
 
         return decorator
 
-    def on_query(self, query: type):
-        def decorator(handler: Callable[..., Any]):
+    def on_query(self, query: type) -> Callable[[T], T]:
+        def decorator(handler: T) -> T:
             if query in self._query_handlers:
                 raise HandlerAlreadyRegisteredError(
                     f"Handler already registered for query {query.__name__}"
