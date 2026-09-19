@@ -1,62 +1,80 @@
+from collections.abc import Callable
+from typing import Any
+
 import pytest
 
-from src.app.errors import HandlerAlreadyRegisteredError, HandlerNotFoundError
-from src.main import example_app
-from src.modules.example.application.command_handlers import ping as ping_command_handler
-from src.modules.example.application.commands import PingCommand
-from src.modules.example.application.queries import PingQuery
-from src.modules.example.application.query_handlers import ping as ping_query_handler
+from src.app.application import Application
+from src.app.errors import (
+    CommandHandlerAlreadyRegisteredError,
+    CommandHandlerNotRegisteredError,
+    QueryHandlerAlreadyRegisteredError,
+    QueryHandlerNotRegisteredError,
+)
+from src.app.module import Command, Module, Query
 
 
-async def test_registered_command_handler():
-    with pytest.raises(HandlerAlreadyRegisteredError):
+@pytest.fixture
+def registered_module(
+    app: Application,
+    module: Module,
+    command: type[Command],
+    query: type[Query],
+    handler: Callable[..., Any],
+) -> Module:
+    module._command_handlers[command.__command__] = handler
+    module._query_handlers[query.__query__] = handler
+    app.add(module)
+    return app.get(module.name)
 
-        @example_app.on_command(PingCommand)
+
+def test_already_registered_command_handler(registered_module, command):
+    with pytest.raises(
+        CommandHandlerAlreadyRegisteredError,
+        match=rf"already registered for command: {command.__command__}",
+    ):
+
+        @registered_module.on_command(command)
         def test():
             pass
 
 
-async def test_nonexistent_command_dispatch():
-    class TestCommand:
-        __name__ = "test"
-
-        type Request = str
-        type Response = str
-
-    with pytest.raises(HandlerNotFoundError):
-        await example_app.handle_command(TestCommand, "hello")
+async def test_nonexistent_command_dispatch(module, command):
+    with pytest.raises(
+        CommandHandlerNotRegisteredError,
+        match=rf"not registered for command: {command.__command__}",
+    ):
+        await module.handle_command(command, "test")
 
 
-async def test_registered_query_handler():
-    with pytest.raises(HandlerAlreadyRegisteredError):
+def test_already_registered_query_handler(registered_module, query):
+    with pytest.raises(
+        QueryHandlerAlreadyRegisteredError,
+        match=rf"already registered for query: {query.__query__}",
+    ):
 
-        @example_app.on_query(PingQuery)
+        @registered_module.on_query(query)
         def test():
             pass
 
 
-async def test_nonexistent_query_dispatch():
-    class TestQuery:
-        __name__ = "test"
-
-        type Request = str
-        type Response = str
-
-    with pytest.raises(HandlerNotFoundError):
-        await example_app.handle_query(TestQuery, "hello")
+async def test_nonexistent_query_dispatch(module, query):
+    with pytest.raises(
+        QueryHandlerNotRegisteredError, match=rf"not registered for query: {query.__query__}"
+    ):
+        await module.handle_query(query, "test")
 
 
-async def test_command_dispatch():
-    result = await example_app.handle_command(PingCommand, "hello")
+async def test_command_dispatch(registered_module, command, handler):
+    result = await registered_module.handle_command(command, "test")
 
-    assert result == "pong: hello"
-    assert PingCommand in example_app._command_handlers
-    assert ping_command_handler == example_app._command_handlers[PingCommand]
+    assert result == "handled"
+    assert command.__command__ in registered_module._command_handlers
+    assert handler == registered_module._command_handlers[command.__command__]
 
 
-async def test_query_dispatch():
-    result = await example_app.handle_query(PingQuery, "hi")
+async def test_query_dispatch(registered_module, query, handler):
+    result = await registered_module.handle_query(query, "test")
 
-    assert result == "pong: hi"
-    assert PingQuery in example_app._query_handlers
-    assert ping_query_handler == example_app._query_handlers[PingQuery]
+    assert result == "handled"
+    assert query.__query__ in registered_module._query_handlers
+    assert handler == registered_module._query_handlers[query.__query__]
