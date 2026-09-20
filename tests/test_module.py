@@ -1,5 +1,5 @@
 from collections.abc import Callable
-from typing import Any
+from typing import Any, Protocol
 
 import pytest
 
@@ -7,6 +7,7 @@ from src.app.application import Application
 from src.app.errors import (
     CommandHandlerAlreadyRegisteredError,
     CommandHandlerNotRegisteredError,
+    DependencyNotRegistered,
     QueryHandlerAlreadyRegisteredError,
     QueryHandlerNotRegisteredError,
 )
@@ -21,8 +22,9 @@ def registered_module(
     query: type[Query],
     handler: Callable[..., Any],
 ) -> Module:
-    module._command_handlers[command.__command__] = handler
-    module._query_handlers[query.__query__] = handler
+    module.on_command(command)(handler)
+    module.on_query(query)(handler)
+
     app.add(module)
     return app.get(module.name)
 
@@ -59,22 +61,118 @@ def test_already_registered_query_handler(registered_module, query):
 
 async def test_nonexistent_query_dispatch(module, query):
     with pytest.raises(
-        QueryHandlerNotRegisteredError, match=rf"not registered for query: {query.__query__}"
+        QueryHandlerNotRegisteredError,
+        match=rf"not registered for query: {query.__query__}",
     ):
         await module.handle_query(query, "test")
 
 
 async def test_command_dispatch(registered_module, command, handler):
-    result = await registered_module.handle_command(command, "test")
+    result = await registered_module.handle_command(command, data="test")
 
     assert result == "handled"
-    assert command.__command__ in registered_module._command_handlers
-    assert handler == registered_module._command_handlers[command.__command__]
+    assert registered_module.get_command_handler(command) is handler
 
 
 async def test_query_dispatch(registered_module, query, handler):
-    result = await registered_module.handle_query(query, "test")
+    result = await registered_module.handle_query(query, data="test")
 
     assert result == "handled"
-    assert query.__query__ in registered_module._query_handlers
-    assert handler == registered_module._query_handlers[query.__query__]
+    assert registered_module.get_query_handler(query) is handler
+
+
+class Port(Protocol):
+    def foo(self, input: str) -> str: ...
+
+
+class Adapter:
+    def foo(self, input: str) -> str:
+        return f"bar: {input}"
+
+
+class Separator(Protocol):
+    def separate(self, items: list[str]) -> str: ...
+
+
+class CommaSeparator:
+    def separate(self, items: list[str]) -> str:
+        return ", ".join(items)
+
+
+class SemicolonSeparator:
+    def separate(self, items: list[str]) -> str:
+        return "; ".join(items)
+
+
+async def test_command_di_resolves(module, command):
+    module.provide(Port, lambda: Adapter())
+
+    @module.on_command(command)
+    async def handle_command(data: str, adapter: Port):
+        return adapter.foo(data)
+
+    result = await module.handle_command(command, data="test")
+    assert result == "bar: test"
+
+
+async def test_command_di_overrides(module, command):
+    module.provide(Port, lambda: Adapter())
+    module.provide(Separator, lambda: CommaSeparator())
+
+    @module.on_command(command)
+    async def handle_command(data: list[str], adapter: Port, separator: Separator):
+        return adapter.foo(separator.separate(items=data))
+
+    default_result = await module.handle_command(command, data=["John", "Jane"])
+    overridden_result = await module.handle_command(
+        command, data=["John", "Jane"], separator=SemicolonSeparator()
+    )
+
+    assert default_result == "bar: John, Jane"
+    assert overridden_result == "bar: John; Jane"
+
+
+async def test_command_di_raises_for_missing_provider(module, command):
+    @module.on_command(command)
+    async def handle_command(data: str, adapter: Port):
+        return adapter.foo(data)
+
+    with pytest.raises(DependencyNotRegistered, match=Port.__name__):
+        await module.handle_command(command, data="test")
+
+
+async def test_query_di_resolves(module, query):
+    module.provide(Port, lambda: Adapter())
+
+    @module.on_query(query)
+    async def handle_query(data: str, adapter: Port):
+        return adapter.foo(data)
+
+    result = await module.handle_query(query, data="test")
+    assert result == "bar: test"
+
+
+async def test_query_di_overrides(module, query):
+    module.provide(Port, lambda: Adapter())
+    module.provide(Separator, lambda: CommaSeparator())
+
+    @module.on_query(query)
+    async def handle_query(data: list[str], adapter: Port, separator: Separator):
+        return adapter.foo(separator.separate(items=data))
+
+    default_result = await module.handle_query(query, data=["John", "Jane"])
+    overridden_result = await module.handle_query(
+        query, data=["John", "Jane"], separator=SemicolonSeparator()
+    )
+
+    assert default_result == "bar: John, Jane"
+    assert overridden_result == "bar: John; Jane"
+
+
+async def test_query_di_raises_for_missing_provider(module, query):
+    @module.on_query(query)
+    async def handle_query(data: str, adapter: Port):
+        return adapter.foo(data)
+
+    with pytest.raises(DependencyNotRegistered, match=Port.__name__):
+        await module.handle_query(query, data="test")

@@ -46,3 +46,15 @@ class QueryHandlerAlreadyRegisteredError(HandlerAlreadyRegisteredError):
 class QueryHandlerNotRegisteredError(HandlerNotRegisteredError):
     def __init__(self, *args: object, name: str, type: RequestType = "query") -> None:
         super().__init__(*args, type=type, name=name)
+
+
+class DependencyAlreadyRegistered(ValueError):
+    def __init__(self, *args: object, name: str) -> None:
+        super().__init__(*args)
+        self.add_note(f"Dependency already registered: {name}")
+
+
+class DependencyNotRegistered(ValueError):
+    def __init__(self, *args: object, name: str) -> None:
+        super().__init__(*args)
+        self.add_note(f"Dependency not registered: {name}")

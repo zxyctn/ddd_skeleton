@@ -1,6 +1,8 @@
+import inspect
 from collections.abc import Callable
-from typing import Any, TypeVar
+from typing import Any, TypeVar, get_type_hints
 
+from src.app.di import DI
 from src.app.errors import (
     CommandHandlerAlreadyRegisteredError,
     CommandHandlerNotRegisteredError,
@@ -8,7 +10,8 @@ from src.app.errors import (
     QueryHandlerNotRegisteredError,
 )
 
-T = TypeVar("T", bound=Callable[..., Any])
+T = TypeVar("T")
+C = TypeVar("C", bound=Callable[..., Any])
 
 
 class Command:
@@ -24,9 +27,46 @@ class Module:
         self.name = name
         self._command_handlers: dict[str, Callable[..., Any]] = {}
         self._query_handlers: dict[str, Callable[..., Any]] = {}
+        self.di = DI()
 
-    def on_command(self, command: type[Command]) -> Callable[[T], T]:
-        def decorator(handler: T) -> T:
+    async def _invoke(
+        self,
+        handler: Callable[..., Any],
+        data: Any,
+        **overrides: Any,
+    ) -> Any:
+        signature = inspect.signature(handler)
+        hints = get_type_hints(handler)
+        kwargs: dict[str, Any] = {}
+
+        for name, _ in signature.parameters.items():
+            if name == "data":
+                kwargs[name] = data
+            elif name in overrides:
+                kwargs[name] = overrides[name]
+            elif name not in hints:
+                raise TypeError(f"Missing type annotation for parameter: {name}")
+            else:
+                kwargs[name] = self.di.resolve(hints[name])
+
+        return await handler(**kwargs)
+
+    def get_command_handler(self, command: type[Command]) -> Callable[..., Any]:
+        try:
+            handler = self._command_handlers[command.__command__]
+        except KeyError:
+            raise CommandHandlerNotRegisteredError(name=command.__command__) from None
+        return handler
+
+    def get_query_handler(self, query: type[Query]) -> Callable[..., Any]:
+        try:
+            handler = self._query_handlers[query.__query__]
+        except KeyError:
+            raise QueryHandlerNotRegisteredError(name=query.__query__) from None
+        return handler
+
+    def on_command(self, command: type[Command]) -> Callable[[C], C]:
+        def decorator(handler: C) -> C:
             if command.__command__ in self._command_handlers:
                 raise CommandHandlerAlreadyRegisteredError(name=command.__command__)
 
@@ -35,8 +75,8 @@ class Module:
 
         return decorator
 
-    def on_query(self, query: type[Query]) -> Callable[[T], T]:
-        def decorator(handler: T) -> T:
+    def on_query(self, query: type[Query]) -> Callable[[C], C]:
+        def decorator(handler: C) -> C:
             if query.__query__ in self._query_handlers:
                 raise QueryHandlerAlreadyRegisteredError(name=query.__query__)
 
@@ -45,18 +85,13 @@ class Module:
 
         return decorator
 
-    async def handle_command(self, command: type[Command], data: Any) -> Any:
-        try:
-            handler = self._command_handlers[command.__command__]
-        except KeyError:
-            raise CommandHandlerNotRegisteredError(name=command.__command__) from None
+    async def handle_command(self, command: type[Command], data: Any, **overrides: Any) -> Any:
+        handler = self.get_command_handler(command)
+        return await self._invoke(handler, data, **overrides)
 
-        return await handler(data)
+    async def handle_query(self, query: type[Query], data: Any, **overrides: Any) -> Any:
+        handler = self.get_query_handler(query)
+        return await self._invoke(handler, data, **overrides)
 
-    async def handle_query(self, query: type[Query], data: Any) -> Any:
-        try:
-            handler = self._query_handlers[query.__query__]
-        except KeyError:
-            raise QueryHandlerNotRegisteredError(name=query.__query__) from None
-
-        return await handler(data)
+    def provide(self, dependency: type[T], provider: Callable[[], T]) -> None:
+        self.di.register(dependency, provider)

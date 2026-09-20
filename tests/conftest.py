@@ -4,12 +4,18 @@ from typing import Any
 import pytest
 
 from src.app.application import Application
+from src.app.di import DI
 from src.app.module import Command, Module, Query
 
 
 @pytest.fixture
 def app() -> Application:
     return Application()
+
+
+@pytest.fixture
+def di() -> DI:
+    return DI()
 
 
 @pytest.fixture
@@ -41,7 +47,7 @@ def query() -> type[Query]:
 
 @pytest.fixture
 def handler() -> Callable[..., Any]:
-    async def _handler(_: str) -> str:
+    async def _handler(data: str) -> str:
         return "handled"
 
     return _handler
