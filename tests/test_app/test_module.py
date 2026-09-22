@@ -177,6 +177,13 @@ async def test_query_di_raises_for_missing_provider(module, query):
     with pytest.raises(DependencyNotRegistered, match=Port.__name__):
         await module.handle_query(query, data="test")
 
+async def test_handler_raises_for_missing_annotation(module, command):
+    @module.on_command(command)
+    async def handler(data, dependency):
+        return "handled"
+
+    with pytest.raises(TypeError, match="Missing type annotation"):
+        await module.handle_command(command, data="test")
 
 async def test_event_handlers_registered(module, event):
     handled: list[str] = []
