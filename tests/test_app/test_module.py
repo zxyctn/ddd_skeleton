@@ -176,3 +176,56 @@ async def test_query_di_raises_for_missing_provider(module, query):
 
     with pytest.raises(DependencyNotRegistered, match=Port.__name__):
         await module.handle_query(query, data="test")
+
+
+async def test_event_handlers_registered(module, event):
+    handled: list[str] = []
+
+    @module.on_event(type(event))
+    async def handler_a():
+        handled.append("handler_a")
+
+    @module.on_event(type(event))
+    async def handler_b():
+        handled.append("handler_b")
+
+    await module.dispatch_event(event)
+
+    handlers = module.get_event_handlers(event)
+
+    assert len(handlers) == 2
+    assert handler_a in handlers
+    assert handler_b in handlers
+    assert handled == ["handler_a", "handler_b"]
+
+
+async def test_event_handler_receives_event(module, event_type):
+    result = ""
+    event = event_type(foo="not bar")
+
+    @module.on_event(event_type)
+    async def handler(data):
+        nonlocal result
+        result = f"foo is {data.foo}"
+
+        assert isinstance(data, event_type)
+
+    await module.dispatch_event(event)
+
+    assert result == f"foo is {event.foo}"
+
+
+async def test_event_handler_di_resolves(module, event_type):
+    result = ""
+    event = event_type(foo="test")
+
+    module.provide(Port, lambda: Adapter())
+
+    @module.on_event(event_type)
+    async def handler(data, adapter: Port):
+        nonlocal result
+        result = adapter.foo(data.foo)
+
+    await module.dispatch_event(event)
+
+    assert result == "bar: test"
