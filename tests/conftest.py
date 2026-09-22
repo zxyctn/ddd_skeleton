@@ -68,7 +68,7 @@ def event_type() -> type[DomainEvent]:
 
 @pytest.fixture
 def event(event_type) -> DomainEvent:
-    return event_type(foo='bar')
+    return event_type(foo="bar")
 
 
 @pytest.fixture
