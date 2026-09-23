@@ -10,6 +10,7 @@ from src.app.errors import (
     QueryHandlerNotRegisteredError,
 )
 from src.app.event import DomainEvent
+from src.app.uow import UnitOfWork
 
 T = TypeVar("T")
 C = TypeVar("C", bound=Callable[..., Any])
@@ -99,7 +100,9 @@ class Module:
 
     async def handle_command(self, command: type[Command], data: Any, **overrides: Any) -> Any:
         handler = self.get_command_handler(command)
-        return await self._invoke(handler, data, **overrides)
+        uow = self.di.resolve(UnitOfWork)
+        async with uow:
+            return await self._invoke(handler, data, **overrides)
 
     async def handle_query(self, query: type[Query], data: Any, **overrides: Any) -> Any:
         handler = self.get_query_handler(query)
