@@ -1,9 +1,9 @@
-from abc import ABC, abstractmethod
 from types import TracebackType
+from typing import Self
 
 
-class UnitOfWork(ABC):
-    async def __aenter__(self) -> "UnitOfWork":
+class UnitOfWork:
+    async def __aenter__(self) -> Self:
         await self.begin()
         return self
 
@@ -18,11 +18,11 @@ class UnitOfWork(ABC):
         else:
             await self.rollback()
 
-    @abstractmethod
-    async def begin(self) -> None: ...
+    async def begin(self) -> None:
+        raise NotImplementedError
 
-    @abstractmethod
-    async def commit(self) -> None: ...
+    async def commit(self) -> None:
+        raise NotImplementedError
 
-    @abstractmethod
-    async def rollback(self) -> None: ...
+    async def rollback(self) -> None:
+        raise NotImplementedError
