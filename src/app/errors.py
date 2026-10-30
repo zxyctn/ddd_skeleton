@@ -1,4 +1,5 @@
 from typing import Literal
+from uuid import UUID
 
 
 class ModuleAlreadyRegisteredError(ValueError):
@@ -58,3 +59,9 @@ class DependencyNotRegistered(ValueError):
     def __init__(self, *args: object, name: str) -> None:
         super().__init__(*args)
         self.add_note(f"Dependency not registered: {name}")
+
+
+class ConcurrencyError(ValueError):
+    def __init__(self, *args: object, aggregate_id: UUID, expected: int, actual: int) -> None:
+        super().__init__(*args)
+        self.add_note(f"Version mismatch for {aggregate_id}: expected {expected}, actual {actual}")

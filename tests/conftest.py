@@ -9,6 +9,7 @@ from src.app.application import Application
 from src.app.di import DI
 from src.app.event import DomainEvent
 from src.app.module import Command, Module, Query
+from tests.fakes.event_store import FakeEventStore
 from tests.fakes.uow import FakeUnitOfWork
 
 
@@ -80,3 +81,8 @@ def agg() -> AggregateRoot:
 @pytest.fixture
 def uow():
     return FakeUnitOfWork()
+
+
+@pytest.fixture
+def event_store():
+    return FakeEventStore()
