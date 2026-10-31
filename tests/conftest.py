@@ -1,6 +1,7 @@
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
+from uuid import uuid4
 
 import pytest
 
@@ -75,7 +76,7 @@ def event(event_type) -> DomainEvent:
 
 @pytest.fixture
 def agg() -> AggregateRoot:
-    return AggregateRoot()
+    return AggregateRoot(aggregate_id=uuid4())
 
 
 @pytest.fixture

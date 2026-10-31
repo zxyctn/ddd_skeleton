@@ -1,6 +1,7 @@
 import inspect
 from collections.abc import Callable, Iterable
 from typing import get_type_hints
+from uuid import UUID
 
 from src.app.errors import AggregateEventHandlerNotRegisteredError
 from src.app.event import DomainEvent
@@ -12,9 +13,10 @@ def apply_event[F: Callable[..., None]](handler: F) -> F:
 
 
 class AggregateRoot:
-    def __init__(self) -> None:
+    def __init__(self, aggregate_id: UUID) -> None:
         self._version = 0
         self._uncommitted_events: list[DomainEvent] = []
+        self.id = aggregate_id
 
     @property
     def version(self) -> int:

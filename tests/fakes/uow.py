@@ -3,6 +3,7 @@ from src.app.uow import UnitOfWork
 
 class FakeUnitOfWork(UnitOfWork):
     def __init__(self) -> None:
+        super().__init__()
         self.began = False
         self.committed = False
         self.rolled_back = False
