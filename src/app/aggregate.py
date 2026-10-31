@@ -1,6 +1,14 @@
-from collections.abc import Iterable
+import inspect
+from collections.abc import Callable, Iterable
+from typing import get_type_hints
 
+from src.app.errors import AggregateEventHandlerNotRegisteredError
 from src.app.event import DomainEvent
+
+
+def apply_event[F: Callable[..., None]](handler: F) -> F:
+    handler.__dict__["__applies_event__"] = True
+    return handler
 
 
 class AggregateRoot:
@@ -16,6 +24,25 @@ class AggregateRoot:
     def uncommitted_events(self) -> tuple[DomainEvent, ...]:
         return tuple(self._uncommitted_events)
 
+    @property
+    def event_handlers(self) -> tuple[Callable[..., None], ...]:
+        return tuple(
+            handler
+            for _, handler in inspect.getmembers(type(self), inspect.isfunction)
+            if getattr(handler, "__applies_event__", False)
+        )
+
+    def _get_event_handler(self, event: DomainEvent) -> Callable[..., None]:
+        for handler in self.event_handlers:
+            if get_type_hints(handler).get("event") is type(event):
+                return handler
+
+        raise AggregateEventHandlerNotRegisteredError(name=type(event).__name__)
+
+    def _apply_event(self, event: DomainEvent) -> None:
+        handler = self._get_event_handler(event)
+        handler(self, event)
+
     def register_event(self, event: DomainEvent) -> None:
         self._apply_event(event)
         self._uncommitted_events.append(event)
@@ -24,9 +51,6 @@ class AggregateRoot:
         for event in events:
             self._apply_event(event)
             self._version += 1
-
-    def _apply_event(self, event: DomainEvent) -> None:
-        raise NotImplementedError
 
     def mark_committed(self) -> None:
         self._version += len(self._uncommitted_events)
