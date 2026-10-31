@@ -39,7 +39,7 @@ class SemicolonSeparator:
 class TestCommands:
     @pytest.fixture
     def module(self, module):
-        module.provide(UnitOfWork, FakeUnitOfWork)
+        module.provide(UnitOfWork, FakeUnitOfWork, scoped=True)
         return module
 
     def test_already_registered_command_handler(self, module, command, handler):

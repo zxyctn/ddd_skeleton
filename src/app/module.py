@@ -100,9 +100,11 @@ class Module:
 
     async def handle_command(self, command: type[Command], data: Any, **overrides: Any) -> Any:
         handler = self.get_command_handler(command)
-        uow = self.di.resolve(UnitOfWork)
-        async with uow:
-            return await self._invoke(handler, data, **overrides)
+
+        async with self.di.scope():
+            uow = self.di.resolve(UnitOfWork)
+            async with uow:
+                return await self._invoke(handler, data, **overrides)
 
     async def handle_query(self, query: type[Query], data: Any, **overrides: Any) -> Any:
         handler = self.get_query_handler(query)
@@ -113,5 +115,7 @@ class Module:
         for handler in handlers:
             await self._invoke(handler, event, **overrides)
 
-    def provide(self, dependency: type[T], provider: Callable[[], T]) -> None:
-        self.di.register(dependency, provider)
+    def provide(
+        self, dependency: type[T], provider: Callable[[], T], *, scoped: bool = False
+    ) -> None:
+        self.di.register(dependency, provider, scoped=scoped)

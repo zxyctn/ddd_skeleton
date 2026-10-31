@@ -3,6 +3,7 @@ from typing import Protocol
 import pytest
 
 from src.app.errors import DependencyAlreadyRegistered, DependencyNotRegistered
+from tests.fakes.uow import FakeUnitOfWork
 
 
 class Port(Protocol):
@@ -29,3 +30,25 @@ def test_di_dependency_already_registered(di):
 def test_di_dependency_not_registered(di):
     with pytest.raises(DependencyNotRegistered, match=Port.__name__):
         di.resolve(Port)
+
+
+async def test_di_scoped_dependency_reuses_instance(di):
+    di.register(FakeUnitOfWork, FakeUnitOfWork, scoped=True)
+
+    async with di.scope():
+        first = di.resolve(FakeUnitOfWork)
+        second = di.resolve(FakeUnitOfWork)
+
+        assert first is second
+
+
+async def test_di_different_scopes_use_different_instances(di):
+    di.register(FakeUnitOfWork, FakeUnitOfWork, scoped=True)
+
+    async with di.scope():
+        first = di.resolve(FakeUnitOfWork)
+
+    async with di.scope():
+        second = di.resolve(FakeUnitOfWork)
+
+    assert first is not second

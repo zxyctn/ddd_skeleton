@@ -5,7 +5,7 @@ from src.app.uow import UnitOfWork
 
 @pytest.fixture
 def module(module, uow):
-    module.provide(UnitOfWork, lambda: uow)
+    module.provide(UnitOfWork, lambda: uow, scoped=True)
     return module
 
 
