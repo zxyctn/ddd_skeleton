@@ -1,12 +1,13 @@
 from dataclasses import dataclass
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 import pytest
 
-from src.app.aggregate import AggregateRoot, apply_event
+from src.app.aggregate import apply_event
 from src.app.errors import AggregateEventHandlerNotRegisteredError
 from src.app.event import DomainEvent
 from src.app.repository import EventSourcedRepository
+from tests.fakes.aggregate import FakeAggregate
 from tests.fakes.event_store import FakeEventStore
 from tests.fakes.uow import FakeUnitOfWork
 
@@ -17,11 +18,7 @@ class SampleEvent(DomainEvent):
     foo: str = "bar"
 
 
-class SampleAggregate(AggregateRoot):
-    def __init__(self, aggregate_id: UUID) -> None:
-        super().__init__(aggregate_id)
-        self.foo = "foo"
-
+class SampleAggregate(FakeAggregate):
     @apply_event
     def handle_test_event(self, event: SampleEvent) -> None:
         self.foo = event.foo
