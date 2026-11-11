@@ -2,7 +2,14 @@
 name = "ddd-skeleton"
 version = "0.1.0"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "sqlalchemy>=2.1.8",
+]
+
+[project.optional-dependencies]
+postgres = [
+    "asyncpg>=0.32.0",
+]
 
 [dependency-groups]
 dev = [
